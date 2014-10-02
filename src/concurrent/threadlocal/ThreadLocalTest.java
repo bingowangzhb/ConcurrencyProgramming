@@ -34,11 +34,12 @@ public class ThreadLocalTest {
 		}
 		
 		try {
-			TimeUnit.MICROSECONDS.sleep(5000);
+			TimeUnit.MILLISECONDS.sleep(1000);
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		System.out.println(tlt.getValue());
 	}
 
 }
