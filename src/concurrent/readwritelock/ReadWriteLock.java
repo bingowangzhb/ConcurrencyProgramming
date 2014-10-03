@@ -1,8 +1,7 @@
 package concurrent.readwritelock;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Read write lock
@@ -12,49 +11,46 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ReadWriteLock {
 	private Map<Thread, Integer> readingThreads;
-	private Thread writingThread;
-	private volatile AtomicInteger writeRequest;
-	private volatile AtomicInteger writeAccesses;
+	private Thread writingThread = null;
+	private int writingAccesses = 0;
+	private int waitingWriters = 0;
 
 	public ReadWriteLock() {
 		// TODO Auto-generated constructor stub
-		readingThreads = new ConcurrentHashMap<Thread, Integer>();
-		writingThread = null;
-		writeRequest = new AtomicInteger(0);
-		writeAccesses = new AtomicInteger(0);
+		this.readingThreads = new HashMap<Thread, Integer>();
 	}
 
 	/**
-	 * Get read lock
+	 * Get a read lock
 	 * 
 	 * @throws InterruptedException
 	 */
-	public synchronized void readLock() throws InterruptedException {
+	public synchronized void lockRead() throws InterruptedException {
 		Thread thread = Thread.currentThread();
-		while (!canGrantReadAccess(thread)) {
+		while (!this.canGrantReadAccess(thread)) {
 			this.wait();
 		}
-		// Put into reader threads map and count the accesses
-		readingThreads.put(thread, getReadAccessCount(thread) + 1);
+		// Put current thread into list and count the read accesses
+		this.readingThreads.put(thread, this.getReadAccessors(thread) + 1);
 	}
 
 	/**
 	 * Release read lock
 	 */
-	public synchronized void unReadLock() {
+	public synchronized void unLockRead() {
 		Thread thread = Thread.currentThread();
-		if (!isReader(thread)) {
-			throw new IllegalMonitorStateException("Current thread does not"
+		// If current thread has not a read lock, throw exception
+		if (!this.isReader(thread)) {
+			throw new IllegalMonitorStateException("Calling Thread does not"
 					+ " hold a read lock on this ReadWriteLock");
 		}
-		int accessCount = getReadAccessCount(thread) - 1;
-		// If current thread has not more read accesses, remove it
+		int accessCount = this.getReadAccessors(thread) - 1;
 		if (accessCount <= 0) {
-			readingThreads.remove(thread);
+			this.readingThreads.remove(thread);
 		} else {
-			readingThreads.put(thread, accessCount);
+			this.readingThreads.put(thread, accessCount);
 		}
-		notifyAll();
+		this.notifyAll();
 	}
 
 	/**
@@ -62,30 +58,32 @@ public class ReadWriteLock {
 	 * 
 	 * @throws InterruptedException
 	 */
-	public synchronized void writeLock() throws InterruptedException {
-		this.writeRequest.incrementAndGet();
+	public synchronized void lockWrite() throws InterruptedException {
+		this.waitingWriters++;
 		Thread thread = Thread.currentThread();
-		while (!canGrantWriteLock(thread)) {
+		while (!this.canGrantWriteAccess(thread)) {
 			this.wait();
 		}
-		this.writeRequest.decrementAndGet();
-		this.writeAccesses.incrementAndGet();
+		this.waitingWriters--;
 		this.writingThread = thread;
+		this.writingAccesses++;
 	}
 
 	/**
-	 * Release the write lock
+	 * Release write lock
 	 */
-	public synchronized void unWriteLock() {
+	public synchronized void unLockWrite() {
 		Thread thread = Thread.currentThread();
-		if (!isWriter(thread)) {
-			throw new IllegalMonitorStateException("Current thread does not"
-					+ " hold a write lock on this ReadWriteLock");
+		// If current thread has not a write lock, throw exception
+		if (!this.isWriter(thread)) {
+			throw new IllegalMonitorStateException("Calling Thread does not"
+					+ " hold the write lock on this ReadWriteLock");
 		}
-		this.writeAccesses.decrementAndGet();
-		if (this.writeAccesses.get() <= 0)
+		this.writingAccesses--;
+		if (this.writingAccesses <= 0) {
 			this.writingThread = null;
-		notifyAll();
+		}
+		this.notifyAll();
 	}
 
 	/**
@@ -95,14 +93,11 @@ public class ReadWriteLock {
 	 * @return
 	 */
 	private boolean canGrantReadAccess(Thread thread) {
-		// If the thread has already read or write access, it can be granted
-		// read access
-		if (isReader(thread) || isWriter(thread))
+		// If the thread is already a reader or a writer, return true
+		if (this.isReader(thread) || this.isWriter(thread))
 			return true;
-
-		// If there are writers or writer requests, it cannot be granted read
-		// access
-		if (hasWriter() || writeRequest.get() > 0)
+		// If there are writers or waiting writers, return falses
+		if (this.writingThread != null || this.waitingWriters > 0)
 			return false;
 		return true;
 	}
@@ -110,81 +105,67 @@ public class ReadWriteLock {
 	/**
 	 * Check if the thread can be granted write access
 	 * 
+	 * @param thread
 	 * @return
 	 */
-	private boolean canGrantWriteLock(Thread thread) {
-		if (isOnlyReader(thread) || isWriter(thread))
+	private boolean canGrantWriteAccess(Thread thread) {
+		// If the thread is the only reader or already a writer, return true
+		if (this.isOnlyReader(thread) || this.isWriter(thread))
 			return true;
-		if (hasReaders() || hasWriter())
+		// If there are readers or writers, return false
+		if (this.readingThreads.size() > 0 || this.writingThread != null)
 			return false;
 		return true;
 	}
 
 	/**
-	 * Check if there are readers currently
-	 * 
-	 * @return
-	 */
-	private boolean hasReaders() {
-		return readingThreads.size() > 0 ? true : false;
-	}
-
-	/**
-	 * Get the read access count of the thread
+	 * Get the count of read accesses of the thread
 	 * 
 	 * @param thread
 	 * @return
 	 */
-	private int getReadAccessCount(Thread thread) {
-		if (readingThreads.get(thread) == null) {
+	private int getReadAccessors(Thread thread) {
+		Integer accessCount = this.readingThreads.get(thread);
+		if (accessCount == null) {
 			return 0;
 		}
-		return readingThreads.get(thread).intValue();
+		return accessCount.intValue();
 	}
 
 	/**
-	 * Check if there is a writer currently
-	 * 
-	 * @return
-	 */
-	private boolean hasWriter() {
-		return writingThread != null ? true : false;
-	}
-
-	/**
-	 * Check if the thread is one of current readers
+	 * Check if the thread has got read access
 	 * 
 	 * @param thread
 	 * @return
 	 */
 	private boolean isReader(Thread thread) {
-		if (readingThreads.get(thread) != null
-				&& readingThreads.get(thread).intValue() > 0)
+		if (this.readingThreads.get(thread) != null
+				&& this.readingThreads.get(thread).intValue() > 0)
 			return true;
 		return false;
 	}
 
 	/**
-	 * Check if the thread is the current writer
-	 * 
-	 * @param thread
-	 * @return
-	 */
-	private boolean isWriter(Thread thread) {
-		if (writingThread != null && writingThread == thread)
-			return true;
-		return false;
-	}
-
-	/**
-	 * Check if the thread is the only reader currently
+	 * Check if the thread is the only one that has got read access
 	 * 
 	 * @param thread
 	 * @return
 	 */
 	private boolean isOnlyReader(Thread thread) {
-		if (readingThreads.size() == 1 && readingThreads.get(thread) != null)
+		if (this.readingThreads.size() == 1
+				&& this.readingThreads.get(thread) != null)
 			return true;
 		return false;
+	}
+
+	/**
+	 * Check if the thread has got write access
+	 * 
+	 * @param thread
+	 * @return
+	 */
+	private boolean isWriter(Thread thread) {
+		return this.writingThread != null && this.writingThread == thread ? true
+				: false;
 	}
 }

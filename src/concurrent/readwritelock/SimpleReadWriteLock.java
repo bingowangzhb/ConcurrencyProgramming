@@ -1,59 +1,51 @@
 package concurrent.readwritelock;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleReadWriteLock {
-	private volatile AtomicInteger readers;
-	private volatile AtomicInteger writers;
-	private volatile AtomicInteger waitingWriters;
-
-	public SimpleReadWriteLock() {
-		// TODO Auto-generated constructor stub
-		readers = new AtomicInteger(0);
-		writers = new AtomicInteger(0);
-		waitingWriters = new AtomicInteger(0);
-	}
+	private int readers;
+	private int writers;
+	private int waitingWriters;
 
 	/**
-	 * Use a read lock
+	 * Get a read lock
 	 * 
 	 * @throws InterruptedException
 	 */
-	public synchronized void readLock() throws InterruptedException {
-		while (writers.get() > 0 || waitingWriters.get() > 0) {
+	public synchronized void lockRead() throws InterruptedException {
+		while (writers > 0 || waitingWriters > 0) {
 			this.wait();
 		}
-		readers.incrementAndGet();
+		readers++;
 	}
 
 	/**
-	 * Release read lock
+	 * Release a read lock
 	 */
-	public synchronized void unReadLock() {
-		readers.decrementAndGet();
-		this.notifyAll();
+	public synchronized void unLockRead() {
+		readers--;
+		notifyAll();
 	}
 
 	/**
-	 * Use a write lock
+	 * Get a write lock
 	 * 
 	 * @throws InterruptedException
 	 */
-	public synchronized void writeLock() throws InterruptedException {
-		waitingWriters.incrementAndGet();
-		while (readers.get() > 0 || writers.get() > 0) {
+	public synchronized void lockWrite() throws InterruptedException {
+		waitingWriters++;
+		while (readers > 0 || writers > 0) {
 			this.wait();
 		}
-		waitingWriters.decrementAndGet();
-		writers.incrementAndGet();
+		waitingWriters--;
+		writers++;
 	}
 
 	/**
-	 * Release write lock
+	 * Release a write lock
 	 */
-	public synchronized void unWriteLock() {
-		writers.decrementAndGet();
-		this.notifyAll();
+	public synchronized void unLockWrite() {
+		writers--;
+		notifyAll();
 	}
 }

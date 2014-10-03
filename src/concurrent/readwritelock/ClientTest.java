@@ -2,6 +2,12 @@ package concurrent.readwritelock;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Client test for read write lock
+ * 
+ * @author Charles Chen
+ * @date 2014Äê10ÔÂ3ÈÕ
+ */
 public class ClientTest {
 
 	public static void main(String[] args) {
@@ -14,17 +20,32 @@ public class ClientTest {
 		testMultiWriters(res);
 	}
 
+	/**
+	 * Test case of a read thread and write thread
+	 * 
+	 * @param res
+	 */
 	public static void testReaderWriter(Resource res) {
 		new Thread(new ReadTask(res), "reader").start();
 		new Thread(new WriteTask(res), "writer").start();
 	}
 
+	/**
+	 * Test case of three read threads
+	 * 
+	 * @param res
+	 */
 	public static void testMultiReaders(Resource res) {
 		new Thread(new ReadTask(res), "reader-01").start();
 		new Thread(new ReadTask(res), "reader-02").start();
 		new Thread(new ReadTask(res), "reader-03").start();
 	}
 
+	/**
+	 * Test case of three write threads
+	 * 
+	 * @param res
+	 */
 	public static void testMultiWriters(Resource res) {
 		new Thread(new WriteTask(res), "writer-01").start();
 		new Thread(new WriteTask(res), "writer-02").start();
@@ -48,20 +69,20 @@ class Resource {
 
 	public void read() {
 		try {
-			lock.readLock();
+			lock.lockRead();
 			for (int i = 0; i < 5; i++) {
 				TimeUnit.MILLISECONDS.sleep(1000);
 				System.out.println("Read " + i);
 			}
 		} catch (Exception e) {
 		} finally {
-			lock.unReadLock();
+			lock.unLockRead();
 		}
 	}
 
 	public void write() {
 		try {
-			lock.writeLock();
+			lock.lockWrite();
 			for (int i = 0; i < 5; i++) {
 				TimeUnit.MILLISECONDS.sleep(1000);
 				System.out.println("Write " + i);
@@ -69,7 +90,7 @@ class Resource {
 		} catch (Exception e) {
 		} finally {
 			try {
-				lock.unWriteLock();
+				lock.unLockWrite();
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
